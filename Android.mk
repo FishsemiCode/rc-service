@@ -6,7 +6,12 @@ LOCAL_CLANG := true
 
 LOCAL_SRC_FILES := main.cpp \
         air_service.cpp \
-        configloader.cpp
+        gnd_service.cpp \
+        config_loader.cpp \
+        event_handler.cpp \
+        key_config_manager.cpp \
+        joystick_config_manager.cpp \
+        message_sender.cpp
 
 LOCAL_MODULE := rc_service
 
