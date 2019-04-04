@@ -189,7 +189,7 @@ void JoystickConfigManager::loadSettings()
     mExponential = mLoader->getFloat("Exponential");
     mAccumulator = mLoader->getBool("Accumulator");
     mDeadband = mLoader->getBool("Deadband");
-    mCenterZeroSupport = mLoader->getBool("CenterZeroSupport");
+    mCenterZeroSupport = mLoader->getBool("CenterZeroSupport", true);
     mThrottleMode = (ThrottleMode_t)mLoader->getInt("ThrottleMode");
     mNegativeThrust = mLoader->getBool("NegativeThrust");
     mFrequency = mLoader->getFloat("Frequency", 25.0f);
