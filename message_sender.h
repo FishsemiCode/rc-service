@@ -27,7 +27,7 @@ class EventHandler;
 class MessageSender
 {
 public:
-    MessageSender(EventHandler *handler);
+    MessageSender(EventHandler *handler, int sbusNum);
     ~MessageSender();
 
     static void setChannelValue(int sbus, int ch, uint16_t value);
@@ -51,6 +51,7 @@ private:
     int mMinChannelValue;
     int mMaxChannelValue;
     float mFrequency;
+    int mSendSbusNum;
 
     static uint16_t mChannelValues[2][16];
 };

@@ -52,6 +52,11 @@ static int load_config(const string &filename)
     g_config.port = loader.getInt("Port", 16666);
     loader.endSection();
 
+    loader.beginSection("SbusCtrl");
+    bool sbus1_enable = !loader.getBool("Sbus1SendbyApp");
+    g_config.send_sbus_num = sbus1_enable ? 2 : 1;
+    loader.endSection();
+
     return 0;
 }
 
