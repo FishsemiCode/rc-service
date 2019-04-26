@@ -54,7 +54,7 @@ EventHandler::EventHandler(struct gnd_service_config *config)
 
     mKeyConfig = new KeyConfigManager(key_filename);
     mJoystickConfig = new JoystickConfigManager(js_filename);
-    mMessageSender = new MessageSender(this);
+    mMessageSender = new MessageSender(this, mConfig->send_sbus_num);
 
     mAxisCount = sizeof(sAxisCodes)/sizeof(sAxisCodes[0]);
     mAxisValues = new int[mAxisCount];

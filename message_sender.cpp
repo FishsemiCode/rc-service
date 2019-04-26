@@ -25,8 +25,9 @@
 
 uint16_t MessageSender::mChannelValues[2][16];
 
-MessageSender::MessageSender(EventHandler *handler)
+MessageSender::MessageSender(EventHandler *handler, int sbusNum)
     :mEventHandler(handler)
+    ,mSendSbusNum(sbusNum)
 {
     bzero(&mSockaddr, sizeof(mSockaddr));
 }
@@ -122,7 +123,7 @@ int MessageSender::sendMessage()
     struct rc_msg msg;
     memset(&msg, 0, sizeof(struct rc_msg));
 
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < mSendSbusNum; i++) {
         msg.type_idex = (i & CHANNEL_IDEX) | SBUS_MODE;
         /* sbus protocol start byte:0xF0 */
         msg.rc_data[0] = SBUS_STARTBYTE;

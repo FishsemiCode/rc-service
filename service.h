@@ -53,6 +53,8 @@ struct gnd_service_config {
 
     char ip[20];
     unsigned long port;
+
+    int send_sbus_num;
 };
 
 int air_main(int argc, char *argv[]);
