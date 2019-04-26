@@ -79,6 +79,7 @@ private:
 
     int *mDeviceFds;
     int mDeviceNum;
+    map<string, int> mDeviceFdMap;
     map<int, struct KeyState> mKeyStatesMap;
     pthread_mutex_t mLock;
     struct gnd_service_config *mConfig;

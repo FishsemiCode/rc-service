@@ -71,9 +71,6 @@ int gnd_main(int argc, char *argv[])
     if (result < 0)
         return result;
 
-    /* wait for all input device created */
-    usleep(500000);
-
     EventHandler handler(&g_config);
     handler.initialize();
 

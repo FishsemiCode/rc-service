@@ -21,6 +21,7 @@
 #include "event_handler.h"
 
 #define INPUT_PATH "/dev/input"
+#define SCAN_TIME 10
 
 #define KEYACTION_DOWN KeyConfigManager::KeyAction_Down
 #define KEYACTION_UP KeyConfigManager::KeyAction_Up
@@ -98,7 +99,21 @@ int EventHandler::initialize()
 {
     setChannelDefaultValues();
 
-    scanDir(INPUT_PATH);
+    int device_num = sizeof(INPUT_DEVICES_NAME) / sizeof(char *);
+    int try_count = 0;
+    do {
+        /* wait for all input device created */
+        usleep(500000);
+        scanDir(INPUT_PATH);
+        try_count++;
+    } while (mDeviceNum < device_num && try_count < SCAN_TIME);
+
+    for (int i = 0; i < device_num; i++) {
+        if (mDeviceFdMap.find(INPUT_DEVICES_NAME[i]) == mDeviceFdMap.end()) {
+            ALOGE("input device '%s' not found.", INPUT_DEVICES_NAME[i]);
+        }
+    }
+
     for (int i = 0; i < mDeviceNum; i++) {
         getAxisInfo(mDeviceFds[i]);
     }
@@ -184,11 +199,17 @@ int EventHandler::findDevice(const char *devicePath)
 
     for (size_t i = 0; i < sizeof(INPUT_DEVICES_NAME) / sizeof(char *); i++) {
         if (!strcmp(name, INPUT_DEVICES_NAME[i])) {
+            if (mDeviceFdMap.find(INPUT_DEVICES_NAME[i]) != mDeviceFdMap.end()) {
+                goto close_fd;
+            }
             ALOGD("find input device %s, name: %s", devicePath, INPUT_DEVICES_NAME[i]);
             mDeviceFds[mDeviceNum++] = fd;
+            mDeviceFdMap[INPUT_DEVICES_NAME[i]] = fd;
             return 0;
         }
     }
+
+close_fd:
     close(fd);
     return 0;
 }
