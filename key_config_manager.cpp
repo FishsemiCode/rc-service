@@ -21,25 +21,19 @@
 #define SHORT_PRESS_POSTFIX "_short_press"
 #define LONG_PRESS_POSTFIX "_long_press"
 
-/* all available keys */
-const string KeyConfigManager::sAvailableKeys[] = { "A", "B", "C", "D", "CAM" };
-map<int, string> KeyConfigManager::sKeyCodeNameMap = {
-    {BUTTON_L1, "A"},
-    {BUTTON_L2, "B"},
-    {BUTTON_R1, "C"},
-    {BUTTON_R2, "D"},
-    {CAMERA, "CAM"}
-};
-
-KeyConfigManager::KeyConfigManager(const string &filename)
-    :mFileName(filename)
+KeyConfigManager::KeyConfigManager(const string &filename, map<int, string> available_keys)
+    : mFileName(filename)
+    , mAvailableKeys(available_keys)
 {
-    mKeyCount = sizeof(sAvailableKeys) / sizeof(sAvailableKeys[0]);
+    mKeyCount = mAvailableKeys.size();
+    ALOGD("supported keys count : %d", mKeyCount);
     mKeyActionNames = new string[mKeyCount * 2];
-    for (int i = 0; i < mKeyCount; i++) {
-        mKeyIndexMap[sAvailableKeys[i]] = i;
-        mKeyActionNames[i * 2] = sAvailableKeys[i] + SHORT_PRESS_POSTFIX;
-        mKeyActionNames[i * 2 + 1] = sAvailableKeys[i] + LONG_PRESS_POSTFIX;
+
+    map<int, string>::iterator it;
+    int i;
+    for (i = 0, it = mAvailableKeys.begin(); it != mAvailableKeys.end(); i++, it++) {
+        mKeyActionNames[i * 2] = it->second + SHORT_PRESS_POSTFIX;
+        mKeyActionNames[i * 2 + 1] = it->second + LONG_PRESS_POSTFIX;
     }
     for (int i = 0; i < mKeyCount * 2; i++) {
         KeySetting_t key_setting;
@@ -53,6 +47,7 @@ KeyConfigManager::KeyConfigManager(const string &filename)
 
 KeyConfigManager::~KeyConfigManager()
 {
+    delete mKeyActionNames;
     delete mLoader;
 }
 
@@ -117,18 +112,20 @@ map<int, int> KeyConfigManager::getSbusDefaultValues(int sbus)
 
 bool KeyConfigManager::getChannelValue(int keyCode, KeyAction_t action, int* sbus, int* channel, int* value)
 {
-    int index = getKeyIndex(keyCode, action);
+    string key_action = getKeyActionStr(keyCode, action);
 
-    if (index < 0 || index >= 2 * mKeyCount) {
+    if (mKeySettingsMap.find(key_action) == mKeySettingsMap.end()) {
         return false;
     }
-    string action_name = mKeyActionNames[index];
-    KeySetting_t setting = mKeySettingsMap[action_name];
+
+    KeySetting_t setting = mKeySettingsMap[key_action];
     if (setting.switchType != 2 && (action == KeyAction_Down || action == KeyAction_Up)) {
         return false;
     }
+
     *sbus = setting.sbus;
     *channel = setting.channel;
+
     if (setting.switchType == 2) {
         if (action == KeyAction_Down) {
             *value = setting.value;
@@ -146,6 +143,7 @@ bool KeyConfigManager::getChannelValue(int keyCode, KeyAction_t action, int* sbu
     } else {
         *value = setting.value;
     }
+
     return (*channel != 0);
 }
 
@@ -157,18 +155,24 @@ bool KeyConfigManager::getScrollWheelSetting(int *sbus, int *channel)
     return (*sbus != 0);
 }
 
-int KeyConfigManager::getKeyIndex(int keyCode, int action)
+string KeyConfigManager::getKeyActionStr(int keyCode, int action)
 {
-    int index = -1;
+    if (mAvailableKeys.find(keyCode) == mAvailableKeys.end()) {
+        return "";
+    }
 
-    string key_name = sKeyCodeNameMap[keyCode];
+    string key_action = mAvailableKeys[keyCode];
     /* to check hold mode setting, just use the setting for short */
     if (action == KeyAction_Down || action == KeyAction_Up) {
         action = 0;
     }
-    index = mKeyIndexMap[key_name] * 2 + action;
+    if (action == 0) {
+        key_action += SHORT_PRESS_POSTFIX;
+    } else if (action == 1) {
+        key_action += LONG_PRESS_POSTFIX;
+    }
 
-    return index;
+    return key_action;
 }
 
 int KeyConfigManager::currentChannelValue(int sbus, int channel)

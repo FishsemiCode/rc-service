@@ -53,7 +53,7 @@ EventHandler::EventHandler(struct gnd_service_config *config)
     *filename++ = '/';
     strcpy(filename, mConfig->js_filename);
 
-    mKeyConfig = new KeyConfigManager(key_filename);
+    mKeyConfig = new KeyConfigManager(key_filename, mConfig->supported_keys);
     mJoystickConfig = new JoystickConfigManager(js_filename);
     mMessageSender = new MessageSender(this, mConfig->send_sbus_num);
 
@@ -65,7 +65,7 @@ EventHandler::EventHandler(struct gnd_service_config *config)
     memset(mDeviceFds, 0, sizeof(int)*count);
 
     map<int, string>::iterator it;
-    for (it = KeyConfigManager::sKeyCodeNameMap.begin(); it != KeyConfigManager::sKeyCodeNameMap.end(); it++) {
+    for (it = mConfig->supported_keys.begin(); it != mConfig->supported_keys.end(); it++) {
         struct KeyState key_state;
         memset(&key_state, 0, sizeof(key_state));
         key_state.keyCode = it->first;
@@ -73,7 +73,6 @@ EventHandler::EventHandler(struct gnd_service_config *config)
     }
 
     pthread_mutex_init(&mLock, NULL);
-
 }
 
 EventHandler::~EventHandler()

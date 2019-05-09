@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <map>
 #include <android/log.h>
 #include <utils/Log.h>
 #include <unistd.h>
@@ -55,6 +56,9 @@ struct gnd_service_config {
     unsigned long port;
 
     int send_sbus_num;
+
+    /* supported key name to key code map. */
+    std::map<int, std::string> supported_keys;
 };
 
 int air_main(int argc, char *argv[]);

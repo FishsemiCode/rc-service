@@ -22,7 +22,7 @@
 
 #include <string>
 #include <map>
-#include <vector>
+#include <list>
 
 using namespace std;
 
@@ -39,6 +39,7 @@ public:
     string getStr(const char *key, const string &default_value);
     void beginSection(const string &section);
     void endSection();
+    list<string> getSectionKeys();
 
 private:
     bool isSpace(char c);

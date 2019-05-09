@@ -207,3 +207,15 @@ void ConfigLoader::endSection()
 {
     _curSection.clear();
 }
+
+list<string> ConfigLoader::getSectionKeys()
+{
+    list<string> keys;
+
+    map<string, string>::iterator it;
+    for (it = _curSection.begin(); it != _curSection.end(); it++) {
+        keys.push_back(it->first);
+    }
+
+    return keys;
+}

@@ -57,6 +57,17 @@ static int load_config(const string &filename)
     g_config.send_sbus_num = sbus1_enable ? 2 : 1;
     loader.endSection();
 
+    list<string> key_names;
+    list<string>::iterator it;
+    loader.beginSection("KeyConfig");
+    key_names = loader.getSectionKeys();
+    for (it = key_names.begin(); it != key_names.end(); it++) {
+        int code = loader.getInt(it->c_str());
+        g_config.supported_keys[code] = *it;
+        ALOGD("got a available key, name : %s, code : %d", g_config.supported_keys[code].c_str(), code);
+    }
+    loader.endSection();
+
     return 0;
 }
 

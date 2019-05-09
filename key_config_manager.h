@@ -21,14 +21,6 @@
 #include <string>
 #include "config_loader.h"
 
-enum {
-    BUTTON_R2 = 114,
-    BUTTON_R1 = 115,
-    BUTTON_L1 = 119,
-    BUTTON_L2 = 158,
-    CAMERA = 212
-};
-
 class KeyConfigManager
 {
 public:
@@ -54,7 +46,7 @@ public:
         int channel;
     } ScrollWheelSetting_t;
 
-    KeyConfigManager(const string &filename);
+    KeyConfigManager(const string &filename, map<int, string> available_keys);
     ~KeyConfigManager();
     void reloadSettings();
     bool getChannelValue(int keyCode, KeyAction_t action, int* sbus, int* channel, int* value);
@@ -62,20 +54,17 @@ public:
     /* get all channels and default values already configured to keys */
     map<int, int> getSbusDefaultValues(int sbus);
 
-    static const string sAvailableKeys[];
-    static map<int, string> sKeyCodeNameMap;
-
 private:
     void loadSettings();
-    int getKeyIndex(int keyCode, int action);
+    string getKeyActionStr(int keyCode, int action);
     int currentChannelValue(int sbus, int channel);
 
     string mFileName;
     ConfigLoader *mLoader;
     int mKeyCount;
+    map<int, string> mAvailableKeys;
     string *mKeyActionNames;
     map<string, KeySetting_t> mKeySettingsMap;
-    map<string, int> mKeyIndexMap;
     ScrollWheelSetting_t mScrollWheelSetting;
 };
 
