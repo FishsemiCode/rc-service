@@ -15,6 +15,7 @@
  */
 
 #include "config_loader.h"
+#include "board_control.h"
 #include "service.h"
 #include <signal.h>
 #include <time.h>
@@ -46,15 +47,20 @@ struct service_config {
     bool is_low_speed;
     int sbus_count;
     char sbus_port[2][20];
+    bool sbus_passthrough[2];
     /* other_config */
     int rc_inet_udp_port;
     char radio_unix_udp_name[20];
+    int control_sbus;
 };
 
 static timer_t g_timer;
 static bool g_stop_flag = false;
 static struct rc_info g_rc[2];
 static struct service_config g_cfg;
+static pthread_mutex_t sbus_lock;
+static pthread_mutex_t bc_lock;
+static pthread_cond_t bc_cond;
 
 static int sbus_port_init(void)
 {
@@ -63,6 +69,8 @@ static int sbus_port_init(void)
 
     for (i = 0; i < g_cfg.sbus_count; i++) {
         g_rc[i].update_flag = false;
+        if (!strcmp(g_cfg.sbus_port[i], ""))
+            continue;
         g_rc[i].tty_fd = open(g_cfg.sbus_port[i], O_RDWR | O_NOCTTY | O_NDELAY);
         if (g_rc[i].tty_fd < 0) {
             ALOGE("open %s failed to connect error=%s\n", g_cfg.sbus_port[i], strerror(errno));
@@ -99,15 +107,17 @@ static void output_sbus_singal(int iSignNo)
     if (SIGUSR1 == iSignNo) {
         for (i = 0; i < 2; i++) {
             if (g_rc[i].update_flag) {
+                pthread_mutex_lock(&sbus_lock);
                 memcpy(sbusdata[i], g_rc[i].rc_data, sizeof(sbusdata[0]));
+                pthread_mutex_unlock(&sbus_lock);
                 g_rc[i].update_flag = false;
             }
         }
 
         if (!g_stop_flag) {
-            if (write(g_rc[0].tty_fd, sbusdata[0], sizeof(sbusdata[0])) < 0)
+            if (g_rc[0].tty_fd && (write(g_rc[0].tty_fd, sbusdata[0], sizeof(sbusdata[0])) < 0))
                 ALOGE("send sbus0 singal failed, err:%s\n", strerror(errno));
-            if (write(g_rc[1].tty_fd, sbusdata[1], sizeof(sbusdata[1])) < 0)
+            if (g_rc[1].tty_fd && (write(g_rc[1].tty_fd, sbusdata[1], sizeof(sbusdata[1])) < 0))
                 ALOGE("send sbus1 singal failed, err:%s\n", strerror(errno));
         }
     }
@@ -224,6 +234,25 @@ static int socket_init(uint16_t family, int port, char *name)
     return sfd;
 }
 
+static void *handle_control(void *data)
+{
+    string filename = (char *)data;
+    uint8_t sbusdata[25] = "\0";
+    BoardControl * bc = new BoardControl(filename);
+
+    while(1) {
+        pthread_mutex_lock(&bc_lock);
+        pthread_cond_wait(&bc_cond, &bc_lock);
+        pthread_mutex_unlock(&bc_lock);
+
+        pthread_mutex_lock(&sbus_lock);
+        memcpy(sbusdata, g_rc[bc->mControlSbus].rc_data, sizeof(sbusdata));
+        pthread_mutex_unlock(&sbus_lock);
+
+        bc->controlDev(&sbusdata);
+    }
+}
+
 static void *recv_radio_msg(void *)
 {
     struct sockaddr_un fromaddr;
@@ -277,11 +306,14 @@ static int load_config_file(const string &filename)
     g_cfg.sbus_count = config_loader.getInt("sbus_count", 2);
     strcpy(g_cfg.sbus_port[0], config_loader.getStr("sbus1_port", "").c_str());
     strcpy(g_cfg.sbus_port[1], config_loader.getStr("sbus2_port", "").c_str());
+    g_cfg.sbus_passthrough[0] = config_loader.getBool("sbus1_passthrough", true);
+    g_cfg.sbus_passthrough[1] = config_loader.getBool("sbus2_passthrough", false);
     config_loader.endSection();
 
     config_loader.beginSection("Other_config");
     g_cfg.rc_inet_udp_port = config_loader.getInt("rc_inet_udp_port", 16666);
     strcpy(g_cfg.radio_unix_udp_name, config_loader.getStr("radio_unix_udp_name", "").c_str());
+    g_cfg.control_sbus = config_loader.getInt("board_control_sbus", 0) - 1;
     config_loader.endSection();
 
     ALOGI("config info -> filter:%.2f, snr_hmin:%d, snr_hmax:%d, rssi_hmin:%d, rssi_hmax:%d, is_low_speed:%d, sbus1_port:%s, sbus2_port:%s, rc_inet_udp_port:%d, radio_unix_udp_name:%s\n",
@@ -293,7 +325,7 @@ static int load_config_file(const string &filename)
 
 int air_main(int argc, char *argv[])
 {
-    pthread_t radio_thread;
+    pthread_t radio_thread, board_control_thread;
     struct sockaddr_in fromaddr;
     struct rc_msg msg;
     int sfd = 0, idx, res;
@@ -311,12 +343,24 @@ int air_main(int argc, char *argv[])
     if (res < 0)
         return res;
 
+    pthread_mutex_init(&sbus_lock, NULL);
+
     timer_init();
 
     res = pthread_create(&radio_thread, NULL, recv_radio_msg, NULL);
     if (res < 0) {
         ALOGE("create radio thread failed\n");
-        goto thread_fail;
+        goto radio_thread_fail;
+    }
+
+    if ((!g_cfg.sbus_passthrough[0] || !g_cfg.sbus_passthrough[1]) && (g_cfg.control_sbus > 0)) {
+        pthread_mutex_init(&bc_lock, NULL);
+        pthread_cond_init(&bc_cond, NULL);
+        res = pthread_create(&board_control_thread, NULL, handle_control, argv[0]);
+        if (res < 0) {
+            ALOGE("create board control thread failed\n");
+            goto board_control_thread_fail;
+        }
     }
 
     sfd = socket_init(AF_INET, g_cfg.rc_inet_udp_port, NULL);
@@ -329,9 +373,16 @@ int air_main(int argc, char *argv[])
         if (recvfrom(sfd, &msg, size, 0, (struct sockaddr *)&fromaddr, &len) == size) {
              if (msg.type_idex & SBUS_MODE) {
                  idx = msg.type_idex & CHANNEL_IDEX;
+                 pthread_mutex_lock(&sbus_lock);
                  memcpy(g_rc[idx].rc_data, msg.rc_data, SBUS_DATA_LEN);
-                 debug_sbus_data(idx, g_rc[idx].rc_data + 1);
+                 pthread_mutex_unlock(&sbus_lock);
                  g_rc[idx].update_flag = true;
+                 debug_sbus_data(idx, g_rc[idx].rc_data + 1);
+                 if (!g_cfg.sbus_passthrough[idx]) {
+                     pthread_mutex_lock(&bc_lock);
+                     pthread_cond_signal(&bc_cond);
+                     pthread_mutex_unlock(&bc_lock);
+                 }
              }
         }
         memset(&msg, '0', size);
@@ -340,8 +391,11 @@ int air_main(int argc, char *argv[])
     return 0;
 
 socket_fail:
+    if (!g_cfg.sbus_passthrough[0] || !g_cfg.sbus_passthrough[1])
+        pthread_exit(&board_control_thread);
+board_control_thread_fail:
     pthread_exit(&radio_thread);
-thread_fail:
+radio_thread_fail:
     if (g_rc[0].tty_fd)
         close(g_rc[0].tty_fd);
 

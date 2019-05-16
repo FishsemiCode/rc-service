@@ -11,7 +11,8 @@ LOCAL_SRC_FILES := main.cpp \
         event_handler.cpp \
         key_config_manager.cpp \
         joystick_config_manager.cpp \
-        message_sender.cpp
+        message_sender.cpp \
+        board_control.cpp
 
 LOCAL_MODULE := rc_service
 
