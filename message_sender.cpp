@@ -14,20 +14,15 @@
  * limitations under the License.
  */
 
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <utils/Log.h>
 #include "message_sender.h"
 
 #define SBUS_STARTBYTE        0x0f
 #define SBUS_ENDBYTE          0x00
-#define DEFAULT_MID_VALUE     1000.f
 
 uint16_t MessageSender::mChannelValues[2][16];
 
-MessageSender::MessageSender(EventHandler *handler, int sbusNum)
-    :mEventHandler(handler)
-    ,mSendSbusNum(sbusNum)
+MessageSender::MessageSender(int sbusNum)
+    : mSendSbusNum(sbusNum)
 {
     bzero(&mSockaddr, sizeof(mSockaddr));
 }
@@ -68,52 +63,10 @@ void *MessageSender::threadLoop(void *arg)
     MessageSender *sender = (MessageSender *)arg;
 
     while (1) {
-        Controls_t controls;
-        sender->mEventHandler->getJoystickControls(&controls);
-        sender->setManualControl(controls);
+        sender->sendMessage();
 
         int mswait = (int)(1000.0f / sender->mFrequency);
         usleep(mswait * 1000);
-    }
-}
-
-void MessageSender::setManualControl(Controls_t controls)
-{
-    /* Store scaling values for all 3 axes */
-    const float axesScaling = 1.0 * 1000.0;
-
-    float ch[4];
-    ch[0] = (controls.roll + 1) * axesScaling;
-    ch[1] = (controls.pitch + 1) * axesScaling;
-    ch[2] = (controls.yaw + 1) * axesScaling;
-    ch[3] = controls.throttle * axesScaling;
-
-    for (int i = 0; i < 4; i++) {
-        if (i == JoystickConfigManager::throttleFunction) {
-            ch[i] = adjustRange(ch[i], DEFAULT_MID_VALUE / 2);
-        } else {
-            ch[i] = adjustRange(ch[i], DEFAULT_MID_VALUE);
-        }
-        mChannelValues[0][mEventHandler->getFunctionChannel(i) - 1] = ch[i];
-    }
-
-    int sbus, channel, channelValue;
-    if (mEventHandler->getScrollWheelSetting(&sbus, &channel)) {
-        channelValue = (int)(DEFAULT_MID_VALUE + controls.wheel * DEFAULT_MID_VALUE);
-        setChannelValue(sbus, channel, channelValue);
-    }
-
-    sendMessage();
-}
-
-uint16_t MessageSender::adjustRange(uint16_t value, float half)
-{
-    uint16_t mid_value = mMinChannelValue + (mMaxChannelValue - mMinChannelValue) / 2;
-
-    if (value <= half) {
-        return (mid_value - ((half - value) / half * (mid_value - mMinChannelValue)));
-    } else {
-        return (mid_value + ((value - half) / half * (mMaxChannelValue - mid_value)));
     }
 }
 

@@ -22,6 +22,7 @@
 
 #define INPUT_PATH "/dev/input"
 #define SCAN_TIME 10
+#define DEFAULT_MID_VALUE     1000.f
 
 #define KEYACTION_DOWN KeyConfigManager::KeyAction_Down
 #define KEYACTION_UP KeyConfigManager::KeyAction_Up
@@ -55,7 +56,7 @@ EventHandler::EventHandler(struct gnd_service_config *config)
 
     mKeyConfig = new KeyConfigManager(key_filename, mConfig->supported_keys);
     mJoystickConfig = new JoystickConfigManager(js_filename);
-    mMessageSender = new MessageSender(this, mConfig->send_sbus_num);
+    mMessageSender = new MessageSender(mConfig->send_sbus_num);
 
     mAxisCount = sizeof(sAxisCodes)/sizeof(sAxisCodes[0]);
     mAxisValues = new int[mAxisCount];
@@ -96,8 +97,6 @@ EventHandler::~EventHandler()
 
 int EventHandler::initialize()
 {
-    setChannelDefaultValues();
-
     int device_num = sizeof(INPUT_DEVICES_NAME) / sizeof(char *);
     int try_count = 0;
     do {
@@ -119,6 +118,10 @@ int EventHandler::initialize()
 
     startLongPressThread();
     notifyConfigChange();
+
+    /* set initial value to send. */
+    setKeyChannelDefaultValues();
+    updateJoystickChannelValues();
 
     if (mMessageSender->openSocket(mConfig->ip, mConfig->port) < 0) {
         ALOGE("open socket failed, ip: %s.", mConfig->ip);
@@ -251,7 +254,7 @@ void *EventHandler::threadLoop(void *arg)
     }
 }
 
-void EventHandler::setChannelDefaultValues()
+void EventHandler::setKeyChannelDefaultValues()
 {
     for (int sbus = 1; sbus <= 2; sbus++) {
         map<int, int> sbus_map = mKeyConfig->getSbusDefaultValues(sbus);
@@ -261,10 +264,10 @@ void EventHandler::setChannelDefaultValues()
 
             if (sbus_map.find(ch) != sbus_map.end()) {
                 if (MessageSender::getChannelValue(sbus, ch) == 0) {
-                    MessageSender::setChannelValue(sbus, ch, sbus_map[ch]);
+                    setChannelValue(sbus, ch, sbus_map[ch]);
                 }
             } else {
-                MessageSender::setChannelValue(sbus, ch, 0);
+                setChannelValue(sbus, ch, 0);
             }
         }
     }
@@ -272,12 +275,6 @@ void EventHandler::setChannelDefaultValues()
 
 void EventHandler::notifyConfigChange()
 {
-    int minChannelValue = mJoystickConfig->getMinChannelValue();
-    int maxChannelValue = mJoystickConfig->getMaxChannelValue();
-
-    mMessageSender->setMinChannelValue(minChannelValue);
-    mMessageSender->setMaxChannelValue(maxChannelValue);
-
     float frequency = mJoystickConfig->getMessageFrequency();
     if (frequency > 0) {
         mMessageSender->setMessageFrequency(frequency);
@@ -351,6 +348,56 @@ int EventHandler::getFunctionChannel(int function)
     return mJoystickConfig->getFunctionChannel(function);
 }
 
+uint16_t EventHandler::adjustRange(uint16_t value, float half)
+{
+    uint16_t minChannelValue = mJoystickConfig->getMinChannelValue();
+    uint16_t maxChannelValue = mJoystickConfig->getMaxChannelValue();
+    uint16_t mid_value = minChannelValue + (maxChannelValue - minChannelValue) / 2;
+
+    if (value <= half) {
+        return (mid_value - ((half - value) / half * (mid_value - minChannelValue)));
+    } else {
+        return (mid_value + ((value - half) / half * (maxChannelValue - mid_value)));
+    }
+}
+
+void EventHandler::setManualControl(Controls_t controls)
+{
+    const float axesScaling = 1.0 * 1000.0;
+
+    float ch[4];
+    ch[0] = (controls.roll + 1) * axesScaling;
+    ch[1] = (controls.pitch + 1) * axesScaling;
+    ch[2] = (controls.yaw + 1) * axesScaling;
+    ch[3] = controls.throttle * axesScaling;
+
+    for (int i = 0; i < 4; i++) {
+        if (i == JoystickConfigManager::throttleFunction) {
+            ch[i] = adjustRange(ch[i], DEFAULT_MID_VALUE / 2);
+        } else {
+            ch[i] = adjustRange(ch[i], DEFAULT_MID_VALUE);
+        }
+        setChannelValue(1, getFunctionChannel(i), ch[i]);
+    }
+
+    int sbus, channel, channelValue;
+    if (getScrollWheelSetting(&sbus, &channel)) {
+        channelValue = (int)(DEFAULT_MID_VALUE + controls.wheel * DEFAULT_MID_VALUE);
+        setChannelValue(sbus, channel, channelValue);
+    }
+}
+
+void EventHandler::updateJoystickChannelValues()
+{
+    Controls_t controls;
+
+    /* get values of 5 functions. */
+    getJoystickControls(&controls);
+
+    /* set values to MessageSender. */
+    setManualControl(controls);
+}
+
 void EventHandler::handleAxisEvent(int axiscode, int value)
 {
     float axis_value;
@@ -367,6 +414,8 @@ void EventHandler::handleAxisEvent(int axiscode, int value)
             mJoystickConfig->setAxisValue(i, mAxisValues[i]);
         }
     }
+
+    updateJoystickChannelValues();
 }
 
 void EventHandler::handleConfigEvent(const char *filename)
@@ -379,7 +428,7 @@ void EventHandler::handleConfigEvent(const char *filename)
     if (!strcmp(filename, mConfig->key_filename)) {
         ALOGD("Key config changed.");
         mKeyConfig->reloadSettings();
-        setChannelDefaultValues();
+        setKeyChannelDefaultValues();
     }
 
     if (!strcmp(filename, mConfig->js_filename)) {

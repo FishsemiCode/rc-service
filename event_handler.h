@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef INPUTHANDLER_H
-#define INPUTHANDLER_H
+#ifndef EVENTHANDLER_H
+#define EVENTHANDLER_H
 
 #include <map>
 #include "service.h"
@@ -62,11 +62,6 @@ public:
     void handleKeyEvent(int keycode, int action);
     void handleAxisEvent(int axiscode, int value);
     void handleConfigEvent(const char *filename);
-    bool getChannelValue(int keyCode, KeyConfigManager::KeyAction_t action, int *sbus, int *ch, int *value);
-    void setChannelValue(int sbus, int ch, int value);
-    bool getScrollWheelSetting(int *sbus, int *channel);
-    void getJoystickControls(Controls_t *controls);
-    int getFunctionChannel(int function);
 
 private:
     int scanDir(const char *dirname);
@@ -74,8 +69,17 @@ private:
     int getAxisInfo(int fd);
     void startLongPressThread();
     static void *threadLoop(void *arg);
-    void setChannelDefaultValues();
+    void setKeyChannelDefaultValues();
+    void setChannelValue(int sbus, int ch, int value);
+    bool getChannelValue(int keyCode, KeyConfigManager::KeyAction_t action, int *sbus, int *ch, int *value);
     void notifyConfigChange();
+
+    void updateJoystickChannelValues();
+    bool getScrollWheelSetting(int *sbus, int *channel);
+    void getJoystickControls(Controls_t *controls);
+    int getFunctionChannel(int function);
+    void setManualControl(Controls_t controls);
+    uint16_t adjustRange(uint16_t value, float half);
 
     int *mDeviceFds;
     int mDeviceNum;

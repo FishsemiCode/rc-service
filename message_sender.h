@@ -17,39 +17,29 @@
 #ifndef MESSAGESENDER_H
 #define MESSAGESENDER_H
 
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include "event_handler.h"
+#include "service.h"
 
 class EventHandler;
 
 class MessageSender
 {
 public:
-    MessageSender(EventHandler *handler, int sbusNum);
+    MessageSender(int sbusNum);
     ~MessageSender();
 
     static void setChannelValue(int sbus, int ch, uint16_t value);
     static int getChannelValue(int sbus, int ch);
     int openSocket(const char *ip, unsigned long port);
     void startThread();
-    void setMinChannelValue(int value) { mMinChannelValue = value; }
-    void setMaxChannelValue(int value) { mMaxChannelValue = value; }
     void setMessageFrequency(float freq) { mFrequency = freq; }
 
 private:
     static void *threadLoop(void *arg);
-    void setManualControl(Controls_t controls);
     int sendMessage();
-    uint16_t adjustRange(uint16_t value, float half);
 
     int mSocketFd;
     struct sockaddr_in mSockaddr;
-    EventHandler *mEventHandler;
 
-    int mMinChannelValue;
-    int mMaxChannelValue;
     float mFrequency;
     int mSendSbusNum;
 
