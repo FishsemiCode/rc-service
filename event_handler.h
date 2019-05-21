@@ -64,11 +64,15 @@ public:
     void handleConfigEvent(const char *filename);
 
 private:
+    static void *longPressThreadFunc(void *arg);
+    static void *pollThreadFunc(void *arg);
+
     int scanDir(const char *dirname);
     int findDevice(const char *devicePath);
     int getAxisInfo(int fd);
     void startLongPressThread();
-    static void *threadLoop(void *arg);
+    void startPollThread();
+
     void setKeyChannelDefaultValues();
     void setChannelValue(int sbus, int ch, int value);
     bool getChannelValue(int keyCode, KeyConfigManager::KeyAction_t action, int *sbus, int *ch, int *value);

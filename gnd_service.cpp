@@ -14,18 +14,8 @@
  * limitations under the License.
  */
 
-#include <fstream>
-#include <linux/errno.h>
-#include <linux/input.h>
-#include <sys/inotify.h>
-#include <sys/epoll.h>
-
 #include "service.h"
 #include "event_handler.h"
-
-static const int EPOLL_SIZE_HINT = 8;
-static const int EPOLL_MAX_EVENTS = 16;
-static const uint32_t EPOLL_ID_INOTIFY = 0x80000001;
 
 static struct gnd_service_config g_config;
 
@@ -85,93 +75,9 @@ int gnd_main(int argc, char *argv[])
     EventHandler handler(&g_config);
     handler.initialize();
 
-    int epollFd = epoll_create(EPOLL_SIZE_HINT);
-    if (epollFd < 0) {
-        ALOGE("Could not create epoll fd: %s", strerror(errno));
-        return -1;
-    }
-
-    /* add input devices fd to epoll instance */
-    int *fds;
-    int count = handler.getInputDeviceFds(&fds);
-    ALOGI("input device num: %d", count);
-    for (int i = 0; i < count; i++) {
-        struct epoll_event deviceEventItem;
-        memset(&deviceEventItem, 0, sizeof(deviceEventItem));
-        deviceEventItem.events = EPOLLIN;
-        deviceEventItem.data.fd = fds[i];
-        result = epoll_ctl(epollFd, EPOLL_CTL_ADD, fds[i], &deviceEventItem);
-        if (result != 0) {
-            ALOGE("Could not add device fd to epoll instance: %s", strerror(errno));
-            return -1;
-        }
-    }
-
-    /* add inotify fd of config file to epoll instance */
-    int inotify_fd = inotify_init();
-    result = inotify_add_watch(inotify_fd, g_config.config_dir, IN_MODIFY | IN_CLOSE_WRITE);
-    if (result < 0) {
-        ALOGE("Could not register INotify for %s: %s", g_config.config_dir, strerror(errno));
-        return -1;
-    }
-    struct epoll_event notifyEventItem;
-    memset(&notifyEventItem, 0, sizeof(notifyEventItem));
-    notifyEventItem.events = EPOLLIN;
-    notifyEventItem.data.u32 = EPOLL_ID_INOTIFY;
-    result = epoll_ctl(epollFd, EPOLL_CTL_ADD, inotify_fd, &notifyEventItem);
-    if (result != 0) {
-        ALOGE("Could not add INotify to epoll instance: %s", strerror(errno));
-        return -1;
-    }
-
-    char event_buf[512];
-    int eventCount;
-    struct epoll_event eventItems[EPOLL_MAX_EVENTS];
-    struct input_event event;
-    struct inotify_event *ievent;
-
+    /* main thread sleep */
     while (1) {
-        eventCount = epoll_wait(epollFd, eventItems, EPOLL_MAX_EVENTS, -1);
-        for (int i = 0; i < eventCount; i++) {
-            const struct epoll_event& eventItem = eventItems[i];
-            if (eventItem.data.u32 == EPOLL_ID_INOTIFY) {
-                if (eventItem.events & EPOLLIN) {
-                    int event_size;
-                    int event_pos = 0;
-                    int res = read(inotify_fd, &event_buf, sizeof(event_buf));
-                    if (res < (int)sizeof(*ievent)) {
-                        ALOGE("could not get event, %s\n", strerror(errno));
-                        continue;
-                    }
-                    while (res >= (int)sizeof(*ievent)) {
-                        ievent = (struct inotify_event *)(event_buf + event_pos);
-                        if (ievent->len) {
-                            if (ievent->mask & IN_CLOSE_WRITE)
-                                handler.handleConfigEvent(ievent->name);
-                        }
-                        event_size = sizeof(*ievent) + ievent->len;
-                        res -= event_size;
-                        event_pos += event_size;
-                    }
-                } else {
-                    ALOGW("Received unexpected epoll event 0x%08x for INotify.", eventItem.events);
-                }
-                continue;
-            }
-
-            if (eventItem.events & EPOLLIN) {
-                int res = read(eventItem.data.fd, &event, sizeof(event));
-                if (res < (int)sizeof(event)) {
-                    ALOGE("Could not get event from fd %d", eventItem.data.fd);
-                    continue;
-                }
-                if (event.type == EV_KEY) {
-                    handler.handleKeyEvent(event.code, event.value);
-                } else if (event.type == EV_ABS) {
-                    handler.handleAxisEvent(event.code, event.value);
-                }
-            }
-        }
+        sleep(1000);
     }
 
     return 0;

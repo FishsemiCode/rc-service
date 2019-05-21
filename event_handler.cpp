@@ -18,6 +18,8 @@
 #include <errno.h>
 #include <dirent.h>
 #include <linux/input.h>
+#include <sys/epoll.h>
+#include <sys/inotify.h>
 #include "event_handler.h"
 
 #define INPUT_PATH "/dev/input"
@@ -28,6 +30,10 @@
 #define KEYACTION_UP KeyConfigManager::KeyAction_Up
 #define SHORT_PRESS KeyConfigManager::KeyAction_ShortPress
 #define LONG_PRESS KeyConfigManager::KeyAction_LongPress
+
+static const int EPOLL_SIZE_HINT = 8;
+static const int EPOLL_MAX_EVENTS = 16;
+static const uint32_t EPOLL_ID_INOTIFY = 0x80000001;
 
 static const char *INPUT_DEVICES_NAME[] = { "gpio-keys", "mlx_joystick" };
 int EventHandler::sAxisCodes[] = {X, Y, Z, RZ, WHEEL};
@@ -116,12 +122,14 @@ int EventHandler::initialize()
         getAxisInfo(mDeviceFds[i]);
     }
 
-    startLongPressThread();
     notifyConfigChange();
 
     /* set initial value to send. */
     setKeyChannelDefaultValues();
     updateJoystickChannelValues();
+
+    startLongPressThread();
+    startPollThread();
 
     if (mMessageSender->openSocket(mConfig->ip, mConfig->port) < 0) {
         ALOGE("open socket failed, ip: %s.", mConfig->ip);
@@ -220,13 +228,13 @@ void EventHandler::startLongPressThread()
 {
     pthread_t thread;
 
-    if (pthread_create(&thread, NULL, threadLoop, (void *)this)) {
+    if (pthread_create(&thread, NULL, longPressThreadFunc, (void *)this)) {
         ALOGE("Failed to create thread to process long press.");
         return;
     }
 }
 
-void *EventHandler::threadLoop(void *arg)
+void *EventHandler::longPressThreadFunc(void *arg)
 {
     EventHandler *handler = (EventHandler *)arg;
     map<int, struct KeyState>::iterator it;
@@ -251,6 +259,107 @@ void *EventHandler::threadLoop(void *arg)
         }
         pthread_mutex_unlock(&handler->mLock);
         usleep(100000);
+    }
+}
+
+void EventHandler::startPollThread()
+{
+    pthread_t thread;
+
+    if (pthread_create(&thread, NULL, pollThreadFunc, (void *)this)) {
+        ALOGE("Failed to create thread to poll events.");
+        return;
+    }
+}
+
+void *EventHandler::pollThreadFunc(void *arg)
+{
+    int result;
+
+    EventHandler *handler = (EventHandler *)arg;
+    int epollFd = epoll_create(EPOLL_SIZE_HINT);
+    if (epollFd < 0) {
+        ALOGE("Could not create epoll fd: %s, end poll thread.", strerror(errno));
+        return NULL;
+    }
+
+    /* add input devices fd to epoll instance */
+    ALOGI("input device num: %d", handler->mDeviceNum);
+    for (int i = 0; i < handler->mDeviceNum; i++) {
+        struct epoll_event deviceEventItem;
+        memset(&deviceEventItem, 0, sizeof(deviceEventItem));
+        deviceEventItem.events = EPOLLIN;
+        deviceEventItem.data.fd = handler->mDeviceFds[i];
+        result = epoll_ctl(epollFd, EPOLL_CTL_ADD, handler->mDeviceFds[i], &deviceEventItem);
+        if (result != 0) {
+            ALOGE("Could not add device fd %d to epoll instance: %s", handler->mDeviceFds[i], strerror(errno));
+        }
+    }
+
+    /* add inotify fd of config file to epoll instance */
+    int inotify_fd = inotify_init();
+    result = inotify_add_watch(inotify_fd, handler->mConfig->config_dir, IN_MODIFY | IN_CLOSE_WRITE);
+    if (result < 0) {
+        ALOGE("Could not register INotify for %s: %s", handler->mConfig->config_dir, strerror(errno));
+    }
+    struct epoll_event notifyEventItem;
+    memset(&notifyEventItem, 0, sizeof(notifyEventItem));
+    notifyEventItem.events = EPOLLIN;
+    notifyEventItem.data.u32 = EPOLL_ID_INOTIFY;
+    result = epoll_ctl(epollFd, EPOLL_CTL_ADD, inotify_fd, &notifyEventItem);
+    if (result != 0) {
+        ALOGE("Could not add INotify to epoll instance: %s", strerror(errno));
+    }
+
+    char event_buf[512];
+    int eventCount;
+    struct epoll_event eventItems[EPOLL_MAX_EVENTS];
+    struct input_event event;
+    struct inotify_event *ievent;
+
+    ALOGD("Entering epoll loop.");
+    while (1) {
+        eventCount = epoll_wait(epollFd, eventItems, EPOLL_MAX_EVENTS, -1);
+        for (int i = 0; i < eventCount; i++) {
+            const struct epoll_event& eventItem = eventItems[i];
+            if (eventItem.data.u32 == EPOLL_ID_INOTIFY) {
+                if (eventItem.events & EPOLLIN) {
+                    int event_size;
+                    int event_pos = 0;
+                    int res = read(inotify_fd, &event_buf, sizeof(event_buf));
+                    if (res < (int)sizeof(*ievent)) {
+                        ALOGE("could not get event, %s\n", strerror(errno));
+                        continue;
+                    }
+                    while (res >= (int)sizeof(*ievent)) {
+                        ievent = (struct inotify_event *)(event_buf + event_pos);
+                        if (ievent->len) {
+                            if (ievent->mask & IN_CLOSE_WRITE)
+                                handler->handleConfigEvent(ievent->name);
+                        }
+                        event_size = sizeof(*ievent) + ievent->len;
+                        res -= event_size;
+                        event_pos += event_size;
+                    }
+                } else {
+                    ALOGW("Received unexpected epoll event 0x%08x for INotify.", eventItem.events);
+                }
+                continue;
+            }
+
+            if (eventItem.events & EPOLLIN) {
+                int res = read(eventItem.data.fd, &event, sizeof(event));
+                if (res < (int)sizeof(event)) {
+                    ALOGE("Could not get event from fd %d", eventItem.data.fd);
+                    continue;
+                }
+                if (event.type == EV_KEY) {
+                    handler->handleKeyEvent(event.code, event.value);
+                } else if (event.type == EV_ABS) {
+                    handler->handleAxisEvent(event.code, event.value);
+                }
+            }
+        }
     }
 }
 
