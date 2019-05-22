@@ -5,14 +5,17 @@ include $(CLEAR_VARS)
 LOCAL_CLANG := true
 
 LOCAL_SRC_FILES := main.cpp \
+        rc_utils.cpp \
         air_service.cpp \
         gnd_service.cpp \
         config_loader.cpp \
+        handler.cpp \
         event_handler.cpp \
         key_config_manager.cpp \
         joystick_config_manager.cpp \
         message_sender.cpp \
-        board_control.cpp
+        board_control.cpp \
+        data_handler.cpp
 
 LOCAL_MODULE := rc_service
 

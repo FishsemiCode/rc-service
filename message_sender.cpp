@@ -15,11 +15,9 @@
  */
 
 #include "message_sender.h"
+#include "rc_utils.h"
 
-#define SBUS_STARTBYTE        0x0f
-#define SBUS_ENDBYTE          0x00
-
-uint16_t MessageSender::mChannelValues[2][16];
+uint16_t MessageSender::mChannelValues[2][16] = { {0}, {0} };
 
 MessageSender::MessageSender(int sbusNum)
     : mSendSbusNum(sbusNum)
@@ -77,57 +75,7 @@ int MessageSender::sendMessage()
     memset(&msg, 0, sizeof(struct rc_msg));
 
     for (int i = 0; i < mSendSbusNum; i++) {
-        msg.type_idex = (i & CHANNEL_IDEX) | SBUS_MODE;
-        /* sbus protocol start byte:0xF0 */
-        msg.rc_data[0] = SBUS_STARTBYTE;
-        /* sbus protocol data1: channel1 0-7 bit */
-        msg.rc_data[1] =(mChannelValues[i][0] & 0xff);
-        /* sbus protocol data2: channel1 8-10 bit and channel2 0-4 */
-        msg.rc_data[2] =(((mChannelValues[i][0] >> 8) | (mChannelValues[i][1]<< 3)) & 0xff);
-        /* sbus protocol data3: channel2 5-10 bit and channel3 0-1 */
-        msg.rc_data[3] =(((mChannelValues[i][1] >> 5) | (mChannelValues[i][2] << 6)) & 0xff);
-        /* sbus protocol data4: channel3 2-9 bit */
-        msg.rc_data[4] =((mChannelValues[i][2] >> 2) & 0xff);
-        /* sbus protocol data5: channel3 10 bit and channel4 0-6 */
-        msg.rc_data[5] =(((mChannelValues[i][2] >> 10) | (mChannelValues[i][3] << 1)) & 0xff);
-        /* sbus protocol data6: channel4 7-10 bit and channel5 0-3 */
-        msg.rc_data[6] =(((mChannelValues[i][3] >> 7) | (mChannelValues[i][4] << 4)) & 0xff);
-        /* sbus protocol data7: channel5 4-10 bit and channel6 0 */
-        msg.rc_data[7] =(((mChannelValues[i][4] >> 4) | (mChannelValues[i][5] << 7)) & 0xff);
-        /* sbus protocol data8: channel6 1-8 bit */
-        msg.rc_data[8] =((mChannelValues[i][5] >> 1) & 0xff);
-        /* sbus protocol data9: channel6 9-10 bit and channel7 0-5 */
-        msg.rc_data[9] =(((mChannelValues[i][5] >> 9) | (mChannelValues[i][6] << 2)) & 0xff);
-        /* sbus protocol data10: channel7 6-10 bit and channel8 0-2 */
-        msg.rc_data[10] =(((mChannelValues[i][6] >> 6) | (mChannelValues[i][7] << 5)) & 0xff);
-        /* sbus protocol data11: channel8 3-10 bit */
-        msg.rc_data[11] =(((mChannelValues[i][7] >> 3)) & 0xff);
-
-        /* sbus protocol data12: channel9 0-7 bit */
-        msg.rc_data[12] =(mChannelValues[i][8] & 0xff);
-        /* sbus protocol data13: channel9 8-10 bit and channel10 0-4 */
-        msg.rc_data[13] =(((mChannelValues[i][8] >> 8) | (mChannelValues[i][9] << 3)) & 0xff);
-        /* sbus protocol data14: channel10 5-10 bit and channel11 0-1 */
-        msg.rc_data[14] =(((mChannelValues[i][9] >> 5) | (mChannelValues[i][10] << 6)) & 0xff);
-        /* sbus protocol data15: channel11 2-9 bit */
-        msg.rc_data[15] =((mChannelValues[i][10] >> 2) & 0xff);
-        /* sbus protocol data16: channel11 10 bit and channel12 0-6 */
-        msg.rc_data[16] =(((mChannelValues[i][10] >> 10) | (mChannelValues[i][11] << 1)) & 0xff);
-        /* sbus protocol data17: channel12 7-10 bit and channel13 0-3 */
-        msg.rc_data[17] =(((mChannelValues[i][11] >> 7) | (mChannelValues[i][12] << 4)) & 0xff);
-        /* sbus protocol data18: channel13 4-10 bit and channel14 0 */
-        msg.rc_data[18] =(((mChannelValues[i][12] >> 4) | (mChannelValues[i][13] << 7)) & 0xff);
-        /* sbus protocol data19: channel14 1-8 bit */
-        msg.rc_data[19] =((mChannelValues[i][13] >> 1) & 0xff);
-        /* sbus protocol data20: channel14 9-10 bit and channel15 0-5 */
-        msg.rc_data[20] =(((mChannelValues[i][13] >> 9) | (mChannelValues[i][14] << 2)) & 0xff);
-        /* sbus protocol data21: channel15 6-10 bit and channel16 0-2 */
-        msg.rc_data[21] =(((mChannelValues[i][14] >> 6) | (mChannelValues[i][15] << 5)) & 0xff);
-        /* sbus protocol data22: channel16 3-10 bit */
-        msg.rc_data[22] =((mChannelValues[i][15] >> 3) & 0xff);
-
-        msg.rc_data[23] = 0x00;
-        msg.rc_data[24] = SBUS_ENDBYTE;
+        pack_rc_msg(i, mChannelValues[i], &msg);
 
         ret = sendto(mSocketFd, &msg, sizeof(msg), 0, (struct sockaddr *)&mSockaddr, sizeof(mSockaddr));
         if (ret < 0) {
@@ -136,6 +84,39 @@ int MessageSender::sendMessage()
     }
 
     return 0;
+}
+
+int MessageSender::sendMessage(int sbus)
+{
+    int ret;
+    struct rc_msg msg;
+    memset(&msg, 0, sizeof(struct rc_msg));
+
+    pack_rc_msg(sbus, mChannelValues[sbus], &msg);
+
+    ret = sendto(mSocketFd, &msg, sizeof(msg), 0, (struct sockaddr *)&mSockaddr, sizeof(mSockaddr));
+    if (ret < 0) {
+        ALOGE("Could not send rc message to air side: %s", strerror(errno));
+    }
+
+    return ret;
+}
+
+int MessageSender::sendMessage(int sbus, uint8_t (&data)[25])
+{
+    int ret;
+    struct rc_msg msg;
+    memset(&msg, 0, sizeof(struct rc_msg));
+
+    msg.type_idex = (sbus & CHANNEL_IDEX) | SBUS_MODE;
+    memcpy(msg.rc_data, data, sizeof(data));
+
+    ret = sendto(mSocketFd, &msg, sizeof(msg), 0, (struct sockaddr *)&mSockaddr, sizeof(mSockaddr));
+    if (ret < 0) {
+        ALOGE("Could not send rc message to air side: %s", strerror(errno));
+    }
+
+    return ret;
 }
 
 void MessageSender::setChannelValue(int sbus, int ch, uint16_t value)

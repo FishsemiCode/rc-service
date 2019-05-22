@@ -21,6 +21,7 @@
 #include <sys/epoll.h>
 #include <sys/inotify.h>
 #include "event_handler.h"
+#include "rc_utils.h"
 
 #define INPUT_PATH "/dev/input"
 #define SCAN_TIME 10
@@ -43,8 +44,8 @@ inline static float avg(float x, float y) {
 }
 
 EventHandler::EventHandler(struct gnd_service_config *config)
-    :mDeviceNum(0),
-     mConfig(config)
+    : Handler(config)
+    , mDeviceNum(0)
 {
     char key_filename[PATH_MAX];
     char js_filename[PATH_MAX];
@@ -62,7 +63,6 @@ EventHandler::EventHandler(struct gnd_service_config *config)
 
     mKeyConfig = new KeyConfigManager(key_filename, mConfig->supported_keys);
     mJoystickConfig = new JoystickConfigManager(js_filename);
-    mMessageSender = new MessageSender(mConfig->send_sbus_num);
 
     mAxisCount = sizeof(sAxisCodes)/sizeof(sAxisCodes[0]);
     mAxisValues = new int[mAxisCount];
@@ -94,7 +94,6 @@ EventHandler::~EventHandler()
 
     delete mKeyConfig;
     delete mJoystickConfig;
-    delete mMessageSender;
     delete[] mAxisValues;
     delete[] mDeviceFds;
 
@@ -131,11 +130,11 @@ int EventHandler::initialize()
     startLongPressThread();
     startPollThread();
 
-    if (mMessageSender->openSocket(mConfig->ip, mConfig->port) < 0) {
+    if (mSender->openSocket(mConfig->ip, mConfig->port) < 0) {
         ALOGE("open socket failed, ip: %s.", mConfig->ip);
         return -1;
     }
-    mMessageSender->startThread();
+    mSender->startThread();
     return 0;
 }
 
@@ -286,14 +285,9 @@ void *EventHandler::pollThreadFunc(void *arg)
     /* add input devices fd to epoll instance */
     ALOGI("input device num: %d", handler->mDeviceNum);
     for (int i = 0; i < handler->mDeviceNum; i++) {
-        struct epoll_event deviceEventItem;
-        memset(&deviceEventItem, 0, sizeof(deviceEventItem));
-        deviceEventItem.events = EPOLLIN;
-        deviceEventItem.data.fd = handler->mDeviceFds[i];
-        result = epoll_ctl(epollFd, EPOLL_CTL_ADD, handler->mDeviceFds[i], &deviceEventItem);
-        if (result != 0) {
-            ALOGE("Could not add device fd %d to epoll instance: %s", handler->mDeviceFds[i], strerror(errno));
-        }
+        epoll_data_t data;
+        data.fd = handler->mDeviceFds[i];
+        add_epoll_fd(epollFd, handler->mDeviceFds[i], data);
     }
 
     /* add inotify fd of config file to epoll instance */
@@ -302,14 +296,9 @@ void *EventHandler::pollThreadFunc(void *arg)
     if (result < 0) {
         ALOGE("Could not register INotify for %s: %s", handler->mConfig->config_dir, strerror(errno));
     }
-    struct epoll_event notifyEventItem;
-    memset(&notifyEventItem, 0, sizeof(notifyEventItem));
-    notifyEventItem.events = EPOLLIN;
-    notifyEventItem.data.u32 = EPOLL_ID_INOTIFY;
-    result = epoll_ctl(epollFd, EPOLL_CTL_ADD, inotify_fd, &notifyEventItem);
-    if (result != 0) {
-        ALOGE("Could not add INotify to epoll instance: %s", strerror(errno));
-    }
+    epoll_data_t data;
+    data.u32 = EPOLL_ID_INOTIFY;
+    add_epoll_fd(epollFd, inotify_fd, data);
 
     char event_buf[512];
     int eventCount;
@@ -386,9 +375,9 @@ void EventHandler::notifyConfigChange()
 {
     float frequency = mJoystickConfig->getMessageFrequency();
     if (frequency > 0) {
-        mMessageSender->setMessageFrequency(frequency);
+        mSender->setMessageFrequency(frequency);
     } else {
-        mMessageSender->setMessageFrequency(25.0);
+        mSender->setMessageFrequency(25.0);
     }
 }
 

@@ -19,6 +19,7 @@
 
 #include <map>
 #include "service.h"
+#include "handler.h"
 #include "key_config_manager.h"
 #include "joystick_config_manager.h"
 #include "message_sender.h"
@@ -33,7 +34,7 @@ enum {
     WHEEL = 8
 };
 
-class EventHandler
+class EventHandler : public Handler
 {
 public:
     enum {
@@ -57,7 +58,9 @@ public:
     EventHandler(struct gnd_service_config *config);
     ~EventHandler();
 
-    int initialize();
+    /* override */
+    virtual int initialize();
+
     int getInputDeviceFds(int **fds);
     void handleKeyEvent(int keycode, int action);
     void handleAxisEvent(int axiscode, int value);
@@ -90,11 +93,9 @@ private:
     map<string, int> mDeviceFdMap;
     map<int, struct KeyState> mKeyStatesMap;
     pthread_mutex_t mLock;
-    struct gnd_service_config *mConfig;
 
     KeyConfigManager *mKeyConfig;
     JoystickConfigManager *mJoystickConfig;
-    MessageSender *mMessageSender;
 
     static int sAxisCodes[];
     map<int, struct AxisInfo> mAxisInfoMap;

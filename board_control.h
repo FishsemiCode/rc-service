@@ -50,8 +50,6 @@ private:
     bool parseSbusData(uint8_t data[][25]);
     void loadSettings();
     bool initPwmDev(int port, int period);
-    bool setValue(const string &filename, int value);
-    bool getValue(const string &filename, int* value);
 };
 
 #endif

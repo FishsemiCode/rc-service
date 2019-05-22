@@ -15,6 +15,7 @@
  */
 
 #include "board_control.h"
+#include "rc_utils.h"
 #include "service.h"
 #include <sstream>
 
@@ -51,7 +52,7 @@ void BoardControl::loadSettings()
     mLoader->endSection();
 
     /* get dual pwm config */
-    for(int i = 0; i < 2; i++) {
+    for (int i = 0; i < 2; i++) {
         ostringstream oss;
         oss << "Device_pwm_" << (i + 1);
         mLoader->beginSection(oss.str());
@@ -88,11 +89,11 @@ void BoardControl::controlDev(uint8_t data[][25])
 {
     string duty_str;
 
-    if(data == NULL || !parseSbusData(data))
+    if (data == NULL || !parseSbusData(data))
         return;
 
     /* control dual pwm device */
-    for(int i = 0; i < 2; i++) {
+    for (int i = 0; i < 2; i++) {
         if ((mDevInfo[i].sbus_channel >= 0) && mDevInfo[i].pwm_duty != mSbusChannelData[mDevInfo[i].sbus_channel]) {
             PWM_PATH(mDevInfo[i].pwm_port, duty_str, PWM_BASE_PATH, "duty_cycle");
             setValue(duty_str, mSbusChannelData[mDevInfo[i].sbus_channel]);
@@ -154,37 +155,5 @@ bool BoardControl::parseSbusData(uint8_t data[][25])
     *d++ = F(s[20] | s[21] << 8, 5);
 
     /* the data[23] don't care */
-    return true;
-}
-
-bool BoardControl::setValue(const string &filename, int value)
-{
-    ofstream oFile(filename.c_str());
-
-    if(!oFile) {
-        ALOGE("open %s failed error=%s\n", filename.c_str(), strerror(errno));
-        return false;
-    }
-
-    oFile << value <<endl;
-    oFile.close();
-
-    return true;
-}
-
-bool BoardControl::getValue(const string &filename, int* value)
-{
-    char buf[10] = "\0";
-    ifstream inFile(filename.c_str());
-
-    if(!inFile) {
-        ALOGE("open %s failed error=%s\n", filename.c_str(), strerror(errno));
-        return false;
-    }
-
-    inFile >> buf;
-    inFile.close();
-    *value = atoi(buf);
-
     return true;
 }

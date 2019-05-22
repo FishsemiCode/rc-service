@@ -16,6 +16,9 @@
 
 #include "service.h"
 #include "event_handler.h"
+#include "data_handler.h"
+
+using namespace std;
 
 static struct gnd_service_config g_config;
 
@@ -35,6 +38,8 @@ static int load_config(const string &filename)
     strcpy(g_config.config_dir, loader.getStr("ConfigDir", "").c_str());
     strcpy(g_config.key_filename, loader.getStr("KeyconfigName", "").c_str());
     strcpy(g_config.js_filename, loader.getStr("JoystickconfigName", "").c_str());
+    /* input source to get data, dafault is 0-input device. */
+    g_config.input_src = loader.getInt("InputSource");
     loader.endSection();
 
     loader.beginSection("UdpConfig");
@@ -47,16 +52,23 @@ static int load_config(const string &filename)
     g_config.send_sbus_num = sbus1_enable ? 2 : 1;
     loader.endSection();
 
-    list<string> key_names;
-    list<string>::iterator it;
-    loader.beginSection("KeyConfig");
-    key_names = loader.getSectionKeys();
-    for (it = key_names.begin(); it != key_names.end(); it++) {
-        int code = loader.getInt(it->c_str());
-        g_config.supported_keys[code] = *it;
-        ALOGD("got a available key, name : %s, code : %d", g_config.supported_keys[code].c_str(), code);
+    if (g_config.input_src == INPUT_DEV) {
+        list<string> key_names;
+        list<string>::iterator it;
+        loader.beginSection("KeyConfig");
+        key_names = loader.getSectionKeys();
+        for (it = key_names.begin(); it != key_names.end(); it++) {
+            int code = loader.getInt(it->c_str());
+            g_config.supported_keys[code] = *it;
+            ALOGD("got a available key, name : %s, code : %d", g_config.supported_keys[code].c_str(), code);
+        }
+        loader.endSection();
+    } else if (g_config.input_src == DATA_DEV) {
+        loader.beginSection("DataConfig");
+        strcpy(g_config.sbus_ports[0], loader.getStr("Sbus1Port", "").c_str());
+        strcpy(g_config.sbus_ports[1], loader.getStr("Sbus2Port", "").c_str());
+        loader.endSection();
     }
-    loader.endSection();
 
     return 0;
 }
@@ -64,6 +76,7 @@ static int load_config(const string &filename)
 int gnd_main(int argc, char *argv[])
 {
     int result;
+    Handler *handler;
 
     if (!argc)
         return -EINVAL;
@@ -72,13 +85,20 @@ int gnd_main(int argc, char *argv[])
     if (result < 0)
         return result;
 
-    EventHandler handler(&g_config);
-    handler.initialize();
+    if (g_config.input_src == INPUT_DEV) {
+        handler = new EventHandler(&g_config);
+        handler->initialize();
+    } else if (g_config.input_src == DATA_DEV) {
+        handler = new DataHandler(&g_config);
+        handler->initialize();
+    }
 
     /* main thread sleep */
     while (1) {
         sleep(1000);
     }
+
+    delete handler;
 
     return 0;
 }

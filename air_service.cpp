@@ -17,10 +17,9 @@
 #include "config_loader.h"
 #include "board_control.h"
 #include "service.h"
+#include "rc_utils.h"
 #include <signal.h>
 #include <time.h>
-#include <termios.h>
-#include <fcntl.h>
 #include <linux/serial.h>
 #include <linux/un.h>
 
@@ -62,38 +61,21 @@ static pthread_mutex_t sbus_lock;
 static pthread_mutex_t bc_lock;
 static pthread_cond_t bc_cond;
 
-static int sbus_port_init(void)
+static int sbus_init(void)
 {
-    struct termios2 tio;
     int i;
 
     for (i = 0; i < g_cfg.sbus_count; i++) {
         g_rc[i].update_flag = false;
         if (!strcmp(g_cfg.sbus_port[i], ""))
             continue;
-        g_rc[i].tty_fd = open(g_cfg.sbus_port[i], O_RDWR | O_NOCTTY | O_NDELAY);
+        g_rc[i].tty_fd = sbus_port_init(g_cfg.sbus_port[i]);
         if (g_rc[i].tty_fd < 0) {
             ALOGE("open %s failed to connect error=%s\n", g_cfg.sbus_port[i], strerror(errno));
             return -ENXIO;
         }
 
-        if (ioctl(g_rc[i].tty_fd, TCGETS2, &tio) < 0) {
-            ALOGE("get tty info failed error=%s\n", strerror(errno));
-            return -ENXIO;
-        }
-
-        tio.c_cflag &= ~(CBAUDEX | CSTOPB | PARENB | PARODD | CRTSCTS | CBAUD);
-        tio.c_cflag |= CSTOPB | PARENB | BOTHER;
-        tio.c_oflag &= ~ONLCR;
-        tio.c_ispeed = SBUS_BAUD;
-        tio.c_ospeed = SBUS_BAUD;
-
-        if (ioctl(g_rc[i].tty_fd, TCSETS2, &tio) < 0) {
-            ALOGE("set baud info failed error=%s\n", strerror(errno));
-            return -ENXIO;
-        }
-
-        ALOGI("%s sbus uart init success\n", g_cfg.sbus_port[i]);
+        ALOGI("%s sbus init success\n", g_cfg.sbus_port[i]);
     }
 
     return 0;
@@ -182,22 +164,6 @@ static void process_radio_msg(struct radio_msg *radio_status)
           g_cfg.filter, g_cfg.snr_hys_min, g_cfg.snr_hys_max, g_cfg.rssi_hys_min, g_cfg.rssi_hys_max);
 }
 
-static void debug_sbus_data(int idx, uint8_t *s)
-{
-    uint16_t channel_data[4];
-    uint16_t *d = channel_data;
-
-    #define F(v, s) (((v) >> (s)) & 0x7ff)
-
-    /* unroll channels 1-4 */
-    *d++ = F(s[0] | s[1] << 8, 0);
-    *d++ = F(s[1] | s[2] << 8, 3);
-    *d++ = F(s[2] | s[3] << 8 | s[4] << 16, 6);
-    *d++ = F(s[4] | s[5] << 8, 1);
-
-    ALOGI("SBUS%d: %d %d %d %d\n", idx, channel_data[0], channel_data[1], channel_data[2], channel_data[3]);
-}
-
 static int socket_init(uint16_t family, int port, char *name)
 {
     int ret = -1, sfd;
@@ -240,7 +206,7 @@ static void *handle_control(void *data)
     uint8_t sbusdata[25] = "\0";
     BoardControl * bc = new BoardControl(filename);
 
-    while(1) {
+    while (1) {
         pthread_mutex_lock(&bc_lock);
         pthread_cond_wait(&bc_cond, &bc_lock);
         pthread_mutex_unlock(&bc_lock);
@@ -339,7 +305,7 @@ int air_main(int argc, char *argv[])
     if (res < 0)
         return res;
 
-    res = sbus_port_init();
+    res = sbus_init();
     if (res < 0)
         return res;
 
@@ -377,7 +343,7 @@ int air_main(int argc, char *argv[])
                  memcpy(g_rc[idx].rc_data, msg.rc_data, SBUS_DATA_LEN);
                  pthread_mutex_unlock(&sbus_lock);
                  g_rc[idx].update_flag = true;
-                 debug_sbus_data(idx, g_rc[idx].rc_data + 1);
+                 debug_sbus_data_interval(idx, g_rc[idx].rc_data + 1, 70);
                  if (!g_cfg.sbus_passthrough[idx]) {
                      pthread_mutex_lock(&bc_lock);
                      pthread_cond_signal(&bc_cond);

@@ -39,6 +39,8 @@
 #define CHANNEL_IDEX          0x01
 #define SBUS_BAUD             100000
 #define SBUS_DATA_LEN         25
+#define SBUS_STARTBYTE        0x0f
+#define SBUS_ENDBYTE          0x00
 
 struct rc_msg {
     /* typs is MSB, idex is LSB */
@@ -47,10 +49,16 @@ struct rc_msg {
     uint8_t rc_data[SBUS_DATA_LEN];
 };
 
+enum {
+    INPUT_DEV = 0,
+    DATA_DEV,
+} input_source;
+
 struct gnd_service_config {
     char config_dir[PATH_MAX];
     char key_filename[PATH_MAX];
     char js_filename[PATH_MAX];
+    int input_src;
 
     char ip[20];
     unsigned long port;
@@ -59,6 +67,8 @@ struct gnd_service_config {
 
     /* supported key name to key code map. */
     std::map<int, std::string> supported_keys;
+
+    char sbus_ports[2][PATH_MAX];
 };
 
 int air_main(int argc, char *argv[]);

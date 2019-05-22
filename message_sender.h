@@ -32,10 +32,12 @@ public:
     int openSocket(const char *ip, unsigned long port);
     void startThread();
     void setMessageFrequency(float freq) { mFrequency = freq; }
+    int sendMessage();
+    int sendMessage(int sbus);
+    int sendMessage(int sbus, uint8_t (&data)[25]);
 
 private:
     static void *threadLoop(void *arg);
-    int sendMessage();
 
     int mSocketFd;
     struct sockaddr_in mSockaddr;
