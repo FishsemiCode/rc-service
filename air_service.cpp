@@ -81,27 +81,25 @@ static int sbus_init(void)
     return 0;
 }
 
-static void output_sbus_singal(int iSignNo)
+static void output_sbus_singal(union sigval val)
 {
     static uint8_t sbusdata[2][SBUS_DATA_LEN];
     int i;
 
-    if (SIGUSR1 == iSignNo) {
-        for (i = 0; i < 2; i++) {
-            if (g_rc[i].update_flag) {
-                pthread_mutex_lock(&sbus_lock);
-                memcpy(sbusdata[i], g_rc[i].rc_data, sizeof(sbusdata[0]));
-                pthread_mutex_unlock(&sbus_lock);
-                g_rc[i].update_flag = false;
-            }
+    for (i = 0; i < 2; i++) {
+        if (g_rc[i].update_flag) {
+            pthread_mutex_lock(&sbus_lock);
+            memcpy(sbusdata[i], g_rc[i].rc_data, sizeof(sbusdata[0]));
+            pthread_mutex_unlock(&sbus_lock);
+            g_rc[i].update_flag = false;
         }
+    }
 
-        if (!g_stop_flag) {
-            if (g_rc[0].tty_fd && (write(g_rc[0].tty_fd, sbusdata[0], sizeof(sbusdata[0])) < 0))
-                ALOGE("send sbus0 singal failed, err:%s\n", strerror(errno));
-            if (g_rc[1].tty_fd && (write(g_rc[1].tty_fd, sbusdata[1], sizeof(sbusdata[1])) < 0))
-                ALOGE("send sbus1 singal failed, err:%s\n", strerror(errno));
-        }
+    if (!g_stop_flag) {
+        if (g_rc[0].tty_fd && (write(g_rc[0].tty_fd, sbusdata[0], sizeof(sbusdata[0])) < 0))
+            ALOGE("send sbus0 singal failed, err:%s\n", strerror(errno));
+        if (g_rc[1].tty_fd && (write(g_rc[1].tty_fd, sbusdata[1], sizeof(sbusdata[1])) < 0))
+            ALOGE("send sbus1 singal failed, err:%s\n", strerror(errno));
     }
 }
 
@@ -110,11 +108,12 @@ static void timer_init(void)
     struct sigevent evp;
     struct itimerspec ts;
 
-    evp.sigev_value.sival_ptr = &g_timer;
-    evp.sigev_notify = SIGEV_SIGNAL;
-    evp.sigev_signo = SIGUSR1;
-    signal(evp.sigev_signo, output_sbus_singal);
+    memset(&evp, 0, sizeof(struct sigevent));
+    memset(&ts, 0, sizeof(struct itimerspec));
 
+    evp.sigev_value.sival_ptr = &g_timer;
+    evp.sigev_notify = SIGEV_THREAD;
+    evp.sigev_notify_function = output_sbus_singal;
     timer_create(CLOCK_MONOTONIC, &evp, &g_timer);
 
     ts.it_interval.tv_sec = 0;
