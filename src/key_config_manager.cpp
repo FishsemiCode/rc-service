@@ -90,9 +90,9 @@ map<int, int> KeyConfigManager::getSbusDefaultValues(int sbus)
         if (sbus == setting->sbus) {
             channel = setting->channel;
             if (channel != 0) {
-                if (setting->switchType > 0) {
+                if (setting->switchType == TYPE_TOGGLE || setting->switchType == TYPE_MOMENTARY) {
                     sbus_map[channel] = setting->defaultValue;
-                } else {
+                } else if (setting->switchType == TYPE_DEFAULT) {
                     if ((sbus_map.find(channel) != sbus_map.end() && sbus_map[channel] > setting->value)
                         || sbus_map.find(channel) == sbus_map.end()) {
                         sbus_map[channel] = setting->value;
@@ -119,14 +119,14 @@ bool KeyConfigManager::getChannelValue(int keyCode, KeyAction_t action, int* sbu
     }
 
     KeySetting_t setting = mKeySettingsMap[key_action];
-    if (setting.switchType != 2 && (action == KeyAction_Down || action == KeyAction_Up)) {
+    if (setting.switchType != TYPE_MOMENTARY && (action == KeyAction_Down || action == KeyAction_Up)) {
         return false;
     }
 
     *sbus = setting.sbus;
     *channel = setting.channel;
 
-    if (setting.switchType == 2) {
+    if (setting.switchType == TYPE_MOMENTARY) {
         if (action == KeyAction_Down) {
             *value = setting.value;
         } else if (action == KeyAction_Up) {
@@ -134,7 +134,7 @@ bool KeyConfigManager::getChannelValue(int keyCode, KeyAction_t action, int* sbu
         } else {
             return false;
         }
-    } else if (setting.switchType == 1) {
+    } else if (setting.switchType == TYPE_TOGGLE) {
         if (currentChannelValue(setting.sbus, setting.channel) == setting.value) {
             *value = setting.defaultValue;
         } else {

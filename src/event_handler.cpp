@@ -127,7 +127,9 @@ int EventHandler::initialize()
     setKeyChannelDefaultValues();
     updateJoystickChannelValues();
 
-    startLongPressThread();
+    if (mConfig->long_press_enabled) {
+        startLongPressThread();
+    }
     startPollThread();
 
     if (mSender->openSocket(mConfig->ip, mConfig->port) < 0) {

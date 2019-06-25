@@ -31,6 +31,13 @@ public:
         KeyAction_Up,
     } KeyAction_t;
 
+    enum SwitchType {
+        TYPE_DEFAULT = 0,
+        TYPE_TOGGLE,
+        TYPE_MOMENTARY,
+        TYPE_MAX,
+    };
+
     typedef struct
     {
         int sbus;

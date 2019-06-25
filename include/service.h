@@ -67,6 +67,7 @@ struct gnd_service_config {
 
     /* supported key name to key code map. */
     std::map<int, std::string> supported_keys;
+    bool long_press_enabled;
 
     char sbus_ports[2][PATH_MAX];
 };

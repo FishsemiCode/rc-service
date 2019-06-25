@@ -55,13 +55,17 @@ static int load_config(const string &filename)
     if (g_config.input_src == INPUT_DEV) {
         list<string> key_names;
         list<string>::iterator it;
-        loader.beginSection("KeyConfig");
+        loader.beginSection("KeySet");
         key_names = loader.getSectionKeys();
         for (it = key_names.begin(); it != key_names.end(); it++) {
             int code = loader.getInt(it->c_str());
             g_config.supported_keys[code] = *it;
             ALOGD("got a available key, name : %s, code : %d", g_config.supported_keys[code].c_str(), code);
         }
+        loader.endSection();
+
+        loader.beginSection("KeyConfig");
+        g_config.long_press_enabled = loader.getBool("LongPressEnabled");
         loader.endSection();
     } else if (g_config.input_src == DATA_DEV) {
         loader.beginSection("DataConfig");
