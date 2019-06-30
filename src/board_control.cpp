@@ -78,6 +78,11 @@ bool BoardControl::initPwmDev(int port, int period)
     if (!setValue(PWM_EXPORT_PATH, port))
         return false;
 
+    /* set duty_cyce first(default value is 0), then set period */
+    PWM_PATH(port, period_str, PWM_BASE_PATH, "duty_cycle");
+    if (!setValue(period_str, 0))
+        return false;
+
     PWM_PATH(port, period_str, PWM_BASE_PATH, "period");
     if (!setValue(period_str, period))
         return false;
@@ -96,7 +101,9 @@ void BoardControl::controlDev(uint8_t data[][25])
     for (int i = 0; i < 2; i++) {
         if ((mDevInfo[i].sbus_channel >= 0) && mDevInfo[i].pwm_duty != mSbusChannelData[mDevInfo[i].sbus_channel]) {
             PWM_PATH(mDevInfo[i].pwm_port, duty_str, PWM_BASE_PATH, "duty_cycle");
-            setValue(duty_str, mSbusChannelData[mDevInfo[i].sbus_channel]);
+            if (mSbusChannelData[mDevInfo[i].sbus_channel] > 100)
+               mSbusChannelData[mDevInfo[i].sbus_channel] = 100;
+            setValue(duty_str, mSbusChannelData[mDevInfo[i].sbus_channel] * (mDevInfo[i].pwm_period / 100));
             mDevInfo[i].pwm_duty = mSbusChannelData[mDevInfo[i].sbus_channel];
         }
     }

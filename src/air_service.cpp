@@ -81,7 +81,7 @@ static int sbus_init(void)
     return 0;
 }
 
-static void output_sbus_singal(union sigval val)
+static void output_sbus_singal(union sigval)
 {
     static uint8_t sbusdata[2][SBUS_DATA_LEN];
     int i;
@@ -127,6 +127,7 @@ static void timer_init(void)
 static void process_radio_msg(struct radio_msg *radio_status)
 {
     static int rssi = INT_MAX, snr = INT_MAX;
+    static int log_interval;
     int tmp_rssi, tmp_noise, tmp_snr;
 
     if (!radio_status) {
@@ -157,10 +158,14 @@ static void process_radio_msg(struct radio_msg *radio_status)
     g_rc[0].update_flag = true;
     g_rc[1].update_flag = true;
 
-    ALOGI("radio status r:%d, cr:%d, s:%d, cs:%d, fs:%d, fu:%d,%d\n",
-          tmp_rssi, rssi, tmp_snr, snr, (int)g_stop_flag, (int)g_rc[0].update_flag, (int)g_rc[1].update_flag);
-    ALOGI("radio threshold filter:%.2f, snr_hmin:%d, snr_hmax:%d, rssi_hmin:%d, rssi_hmax:%d\n",
-          g_cfg.filter, g_cfg.snr_hys_min, g_cfg.snr_hys_max, g_cfg.rssi_hys_min, g_cfg.rssi_hys_max);
+    if (log_interval % 20 == 0) {
+        ALOGI("radio status r:%d, cr:%d, s:%d, cs:%d, fs:%d, fu:%d,%d\n",
+              tmp_rssi, rssi, tmp_snr, snr, (int)g_stop_flag, (int)g_rc[0].update_flag, (int)g_rc[1].update_flag);
+        ALOGI("radio threshold filter:%.2f, snr_hmin:%d, snr_hmax:%d, rssi_hmin:%d, rssi_hmax:%d\n",
+              g_cfg.filter, g_cfg.snr_hys_min, g_cfg.snr_hys_max, g_cfg.rssi_hys_min, g_cfg.rssi_hys_max);
+        log_interval = 0;
+    }
+    log_interval++;
 }
 
 static int socket_init(uint16_t family, int port, char *name)
