@@ -68,7 +68,7 @@ void BoardControl::loadSettings()
 
 bool BoardControl::initPwmDev(int port, int period)
 {
-    string period_str;
+    string period_str, duty_str, enable_str;
 
     if (port >= 2) {
         ALOGE("invalid parameter port:%d\n", port);
@@ -79,12 +79,16 @@ bool BoardControl::initPwmDev(int port, int period)
         return false;
 
     /* set duty_cyce first(default value is 0), then set period */
-    PWM_PATH(port, period_str, PWM_BASE_PATH, "duty_cycle");
-    if (!setValue(period_str, 0))
+    PWM_PATH(port, duty_str, PWM_BASE_PATH, "duty_cycle");
+    if (!setValue(duty_str, 0))
         return false;
 
     PWM_PATH(port, period_str, PWM_BASE_PATH, "period");
     if (!setValue(period_str, period))
+        return false;
+
+    PWM_PATH(port, enable_str, PWM_BASE_PATH, "enable");
+    if (!setValue(period_str, 1))
         return false;
 
     return true;
