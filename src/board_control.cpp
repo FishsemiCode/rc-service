@@ -88,7 +88,7 @@ bool BoardControl::initPwmDev(int port, int period)
         return false;
 
     PWM_PATH(port, enable_str, PWM_BASE_PATH, "enable");
-    if (!setValue(period_str, 1))
+    if (!setValue(enable_str, 1))
         return false;
 
     return true;
