@@ -90,18 +90,20 @@ void JoystickConfigManager::getJoystickControls(Controls_t *controls)
         throttle = throttle_accu;
     }
 
-    float roll_limited = std::max(static_cast<float>(-M_PI_4), std::min(roll, static_cast<float>(M_PI_4)));
-    float pitch_limited = std::max(static_cast<float>(-M_PI_4), std::min(pitch, static_cast<float>(M_PI_4)));
-    float yaw_limited = std::max(static_cast<float>(-M_PI_4), std::min(yaw, static_cast<float>(M_PI_4)));
-    float throttle_limited = std::max(static_cast<float>(-M_PI_4), std::min(throttle, static_cast<float>(M_PI_4)));
-    float wheel_limited = std::max(static_cast<float>(-M_PI_4), std::min(wheel, static_cast<float>(M_PI_4)));
+    if (mCircleCorrection) {
+        float roll_limited = std::max(static_cast<float>(-M_PI_4), std::min(roll, static_cast<float>(M_PI_4)));
+        float pitch_limited = std::max(static_cast<float>(-M_PI_4), std::min(pitch, static_cast<float>(M_PI_4)));
+        float yaw_limited = std::max(static_cast<float>(-M_PI_4), std::min(yaw, static_cast<float>(M_PI_4)));
+        float throttle_limited = std::max(static_cast<float>(-M_PI_4), std::min(throttle, static_cast<float>(M_PI_4)));
+        float wheel_limited = std::max(static_cast<float>(-M_PI_4), std::min(wheel, static_cast<float>(M_PI_4)));
 
-    /* Map from unit circle to linear range and limit */
-    roll =      std::max(-1.0f, std::min(tanf(asinf(roll_limited)), 1.0f));
-    pitch =     std::max(-1.0f, std::min(tanf(asinf(pitch_limited)), 1.0f));
-    yaw =       std::max(-1.0f, std::min(tanf(asinf(yaw_limited)), 1.0f));
-    throttle =  std::max(-1.0f, std::min(tanf(asinf(throttle_limited)), 1.0f));
-    wheel =     std::max(-1.0f, std::min(tanf(asinf(wheel_limited)), 1.0f));
+        /* Map from unit circle to linear range and limit */
+        roll =      std::max(-1.0f, std::min(tanf(asinf(roll_limited)), 1.0f));
+        pitch =     std::max(-1.0f, std::min(tanf(asinf(pitch_limited)), 1.0f));
+        yaw =       std::max(-1.0f, std::min(tanf(asinf(yaw_limited)), 1.0f));
+        throttle =  std::max(-1.0f, std::min(tanf(asinf(throttle_limited)), 1.0f));
+        wheel =     std::max(-1.0f, std::min(tanf(asinf(wheel_limited)), 1.0f));
+    }
 
     if (mExponential != 0) {
         roll =      -mExponential*powf(roll,3) + (1+mExponential) * roll;
@@ -193,6 +195,7 @@ void JoystickConfigManager::loadSettings()
     mThrottleMode = (ThrottleMode_t)mLoader->getInt("ThrottleMode");
     mNegativeThrust = mLoader->getBool("NegativeThrust");
     mFrequency = mLoader->getFloat("Frequency", 25.0f);
+    mCircleCorrection = mLoader->getBool("CircleCorrection", true);
     mLoader->endSection();
 }
 

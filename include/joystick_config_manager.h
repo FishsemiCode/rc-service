@@ -86,6 +86,7 @@ private:
     ThrottleMode_t mThrottleMode;
     bool mNegativeThrust;
     float mFrequency;
+    bool mCircleCorrection;
 
     /* min and max value of functions */
     int mMinChannelValue;
