@@ -15,25 +15,38 @@
  */
 
 #include "service.h"
+#include "config_loader.h"
 
 int main(int argc, char *argv[])
 {
     int ret;
+    char unit_type[5] = "\0";
+    ConfigLoader config_loader;
+
     if (argc < 2) {
         ALOGE("%s:the count of parameter is not enough\n", __FUNCTION__);
         return -EINVAL;
     }
 
-    if (!strncmp("air", argv[1], 3) && argc >= 3) {
+    if (!config_loader.loadConfig(argv[1])) {
+        ALOGE("Loading config file:%s failed\n", argv[1]);
+        return -ENXIO;
+    }
+
+    config_loader.beginSection("Device");
+    strncpy(unit_type, config_loader.getStr("UnitType", "").c_str(), 3);
+    config_loader.endSection();
+
+    if (!strncmp("air", unit_type, 3)) {
         ALOGI("starting air rc service\n");
-        ret = air_main(argc - 2, &argv[2]);
+        ret = air_main(argc - 1, &argv[1]);
         if (ret < 0) {
             ALOGI("start air rc service failed\n");
             return ret;
         }
-    } else if (!strncmp("gnd", argv[1], 3)) {
+    } else if (!strncmp("gnd", unit_type, 3)) {
         ALOGI("starting gnd rc service\n");
-        ret = gnd_main(argc - 2, &argv[2]);
+        ret = gnd_main(argc - 1, &argv[1]);
         if (ret < 0) {
             ALOGI("start ground rc service failed\n");
             return ret;
