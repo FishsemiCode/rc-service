@@ -17,6 +17,7 @@
 #include "service.h"
 #include "event_handler.h"
 #include "data_handler.h"
+#include "tty_handler.h"
 
 using namespace std;
 
@@ -67,7 +68,7 @@ static int load_config(const string &filename)
         loader.beginSection("KeyConfig");
         g_config.long_press_enabled = loader.getBool("LongPressEnabled");
         loader.endSection();
-    } else if (g_config.input_src == DATA_DEV) {
+    } else if (g_config.input_src == DATA_DEV || g_config.input_src == TTY_DEV) {
         loader.beginSection("DataConfig");
         strcpy(g_config.sbus_ports[0], loader.getStr("Sbus1Port", "").c_str());
         strcpy(g_config.sbus_ports[1], loader.getStr("Sbus2Port", "").c_str());
@@ -94,6 +95,9 @@ int gnd_main(int argc, char *argv[])
         handler->initialize();
     } else if (g_config.input_src == DATA_DEV) {
         handler = new DataHandler(&g_config);
+        handler->initialize();
+    } else if (g_config.input_src == TTY_DEV) {
+        handler = new TTYHandler(&g_config);
         handler->initialize();
     }
 

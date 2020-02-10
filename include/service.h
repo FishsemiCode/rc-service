@@ -52,6 +52,7 @@ struct rc_msg {
 enum {
     INPUT_DEV = 0,
     DATA_DEV,
+    TTY_DEV,
 } input_source;
 
 struct gnd_service_config {

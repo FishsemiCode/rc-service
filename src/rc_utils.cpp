@@ -72,6 +72,36 @@ failed:
     return -ENXIO;
 }
 
+int tty_port_init(const char *tty_port)
+{
+    struct termios2 tio;
+    struct termios opt;
+
+    int tty_fd = open(tty_port, O_RDWR | O_NOCTTY | O_CLOEXEC);
+    if (tty_fd < 0) {
+        ALOGE("open %s failed to connect error=%s\n", tty_port, strerror(errno));
+        return -ENXIO;
+    }
+
+    tcgetattr(tty_fd, &opt);
+    cfmakeraw(&opt);
+    cfsetispeed(&opt, B115200);
+    tcsetattr(tty_fd, TCSANOW, &opt);
+
+    if (ioctl(tty_fd, TCFLSH, TCIOFLUSH) == -1) {
+        ALOGE("Could not flush terminal (%m)");
+        goto failed;
+    }
+
+    ALOGI("%s tty uart init success\n", tty_port);
+
+    return tty_fd;
+
+failed:
+    close(tty_fd);
+    return -ENXIO;
+}
+
 int add_epoll_fd(int epoll_fd, int device_fd, epoll_data_t data)
 {
     int ret = 0;
@@ -279,4 +309,31 @@ int sbus_to_ppm(int sbus)
     }
 
     return ppm;
+}
+
+uint16_t crc16_sum(uint8_t data[], size_t size)
+{
+    uint16_t sum = 0xffff;
+    size_t i = 0;
+    uint8_t tmp;
+
+    while (i < size) {
+        tmp = data[i] ^ (uint8_t)(sum & 0xff);
+        tmp ^= (tmp << 4);
+        sum = (sum >> 8) ^ (tmp << 8) ^ (tmp << 3) ^ (tmp >> 4);
+        i++;
+    }
+
+    return sum;
+}
+
+uint8_t bcc_sum(uint8_t data[], size_t size)
+{
+    uint8_t sum = 0x00;
+
+    for (size_t i = 0; i < size; i++) {
+        sum ^= data[i];
+    }
+
+    return sum;
 }

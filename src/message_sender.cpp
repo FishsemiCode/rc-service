@@ -119,6 +119,18 @@ int MessageSender::sendMessage(int sbus, uint8_t (&data)[25])
     return ret;
 }
 
+int MessageSender::sendMessage(struct rc_msg *msg)
+{
+    int ret;
+
+    ret = sendto(mSocketFd, msg, sizeof(struct rc_msg), 0, (struct sockaddr *)&mSockaddr, sizeof(mSockaddr));
+    if (ret < 0) {
+        ALOGE("Could not send rc message to air side: %s", strerror(errno));
+    }
+
+    return ret;
+}
+
 void MessageSender::setChannelValue(int sbus, int ch, uint16_t value)
 {
     mChannelValues[sbus - 1][ch - 1] = value;

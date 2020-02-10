@@ -18,7 +18,8 @@ LOCAL_SRC_FILES := src/main.cpp \
         src/joystick_config_manager.cpp \
         src/message_sender.cpp \
         src/board_control.cpp \
-        src/data_handler.cpp
+        src/data_handler.cpp \
+        src/tty_handler.cpp
 
 LOCAL_MODULE := rc_service
 

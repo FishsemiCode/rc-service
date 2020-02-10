@@ -35,6 +35,7 @@ public:
     int sendMessage();
     int sendMessage(int sbus);
     int sendMessage(int sbus, uint8_t (&data)[25]);
+    int sendMessage(struct rc_msg *msg);
 
 private:
     static void *threadLoop(void *arg);
